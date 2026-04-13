@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: workout-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/workouts.db
+      - key: SYNC_TOKEN
+        generateValue: true   # Render auto-generates a secret token
+
+    disk:
+      name: workout-data
+      mountPath: /var/data
+      sizeGB: 1
