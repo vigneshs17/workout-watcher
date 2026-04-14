@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const {
+  initDb,
   upsertMany,
   getAllWorkouts,
   getFrequency,
@@ -20,7 +21,7 @@ app.use(express.json({ limit: "2mb" }));
 // Optional: simple token auth (set SYNC_TOKEN env var to enable)
 function authMiddleware(req, res, next) {
   const token = process.env.SYNC_TOKEN;
-  if (!token) return next(); // auth disabled if no token set
+  if (!token) return next();
 
   const provided = req.headers["x-sync-token"] || req.query.token;
   if (provided !== token) {
@@ -30,7 +31,7 @@ function authMiddleware(req, res, next) {
 }
 
 // ── Webhook: receive workouts from Scriptable ──────────────────
-app.post("/api/workouts", authMiddleware, (req, res) => {
+app.post("/api/workouts", authMiddleware, async (req, res) => {
   const { workouts, synced_at } = req.body;
 
   if (!Array.isArray(workouts) || workouts.length === 0) {
@@ -38,7 +39,7 @@ app.post("/api/workouts", authMiddleware, (req, res) => {
   }
 
   try {
-    upsertMany(workouts, synced_at || new Date().toISOString());
+    await upsertMany(workouts, synced_at || new Date().toISOString());
     console.log(`[${new Date().toISOString()}] Synced ${workouts.length} workouts`);
     res.json({ status: "ok", synced: workouts.length });
   } catch (err) {
@@ -49,46 +50,70 @@ app.post("/api/workouts", authMiddleware, (req, res) => {
 
 // ── Dashboard API endpoints ────────────────────────────────────
 
-// GET /api/summary — overall stats
-app.get("/api/summary", (req, res) => {
-  res.json(getSummary());
+app.get("/api/summary", async (req, res) => {
+  try {
+    res.json(await getSummary());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// GET /api/workouts — raw list (last 200)
-app.get("/api/workouts", (req, res) => {
-  const limit = parseInt(req.query.limit) || 200;
-  res.json(getAllWorkouts(limit));
+app.get("/api/workouts", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 200;
+    res.json(await getAllWorkouts(limit));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// GET /api/frequency?days=90 — workouts per day
-app.get("/api/frequency", (req, res) => {
-  const days = parseInt(req.query.days) || 90;
-  res.json(getFrequency(days));
+app.get("/api/frequency", async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 90;
+    res.json(await getFrequency(days));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// GET /api/duration?weeks=12 — weekly duration totals
-app.get("/api/duration", (req, res) => {
-  const weeks = parseInt(req.query.weeks) || 12;
-  res.json(getWeeklyDuration(weeks));
+app.get("/api/duration", async (req, res) => {
+  try {
+    const weeks = parseInt(req.query.weeks) || 12;
+    res.json(await getWeeklyDuration(weeks));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// GET /api/calories?weeks=12 — weekly calorie totals
-app.get("/api/calories", (req, res) => {
-  const weeks = parseInt(req.query.weeks) || 12;
-  res.json(getWeeklyCalories(weeks));
+app.get("/api/calories", async (req, res) => {
+  try {
+    const weeks = parseInt(req.query.weeks) || 12;
+    res.json(await getWeeklyCalories(weeks));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// GET /api/types — breakdown by workout type
-app.get("/api/types", (req, res) => {
-  res.json(getTypeBreakdown());
+app.get("/api/types", async (req, res) => {
+  try {
+    res.json(await getTypeBreakdown());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: new Date().toISOString() });
 });
 
 // ── Start ──────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`Workout backend running on port ${PORT}`);
-});
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Workout backend running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to initialize database:", err.message);
+    process.exit(1);
+  });
