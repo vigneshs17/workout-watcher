@@ -115,6 +115,17 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: new Date().toISOString() });
 });
 
+// ── Debug: capture raw payload ─────────────────────────────────
+let lastDebugPayload = null;
+app.post("/api/debug", (req, res) => {
+  lastDebugPayload = req.body;
+  console.log("DEBUG payload:", JSON.stringify(req.body, null, 2));
+  res.json({ status: "ok" });
+});
+app.get("/api/debug", (req, res) => {
+  res.json(lastDebugPayload || { message: "No payload received yet" });
+});
+
 // ── Start ──────────────────────────────────────────────────────
 initDb()
   .then(() => {
