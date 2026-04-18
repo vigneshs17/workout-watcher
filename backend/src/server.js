@@ -18,6 +18,15 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
+// Log all incoming requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log("Body:", JSON.stringify(req.body, null, 2));
+  }
+  next();
+});
+
 // Optional: simple token auth (set SYNC_TOKEN env var to enable)
 function authMiddleware(req, res, next) {
   const token = process.env.SYNC_TOKEN;
