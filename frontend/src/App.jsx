@@ -3,7 +3,6 @@ import { useWorkouts }    from "./hooks/useWorkouts";
 import { applyFilters, computeStats } from "./utils/data";
 import StatCard       from "./components/StatCard";
 import Filters        from "./components/Filters";
-import FrequencyChart from "./components/FrequencyChart";
 import DurationChart  from "./components/DurationChart";
 import CaloriesChart  from "./components/CaloriesChart";
 import TypeBreakdown  from "./components/TypeBreakdown";
@@ -83,16 +82,11 @@ export default function App() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Workouts"   value={stats.total}                    color="text-blue-400"   />
-        <StatCard label="Total Hours"      value={stats.hours.toFixed(1)}         color="text-emerald-400"/>
-        <StatCard label="Total Calories"   value={stats.calories >= 1000 ? (stats.calories / 1000).toFixed(1) + "k" : Math.round(stats.calories)} color="text-amber-400"  />
-        <StatCard label="Avg Duration (min)" value={stats.avgDuration.toFixed(1)} color="text-violet-400" />
+        <StatCard label="Total Workouts"    value={stats.total}                   color="text-blue-400"   />
+        <StatCard label="Total Hours"       value={stats.hours.toFixed(1)}        color="text-emerald-400"/>
+        <StatCard label="Avg Duration (min)" value={stats.avgDuration.toFixed(1)} color="text-amber-400"  />
+        <StatCard label="Avg Distance (km)" value={stats.avgDistance.toFixed(2)}  color="text-violet-400" />
       </div>
-
-      {/* Workouts per week */}
-      <Card title="Workouts per Week + 4-Week Trend">
-        <FrequencyChart workouts={filtered} />
-      </Card>
 
       {/* Duration + Calories */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">

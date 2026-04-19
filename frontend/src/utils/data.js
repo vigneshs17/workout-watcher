@@ -66,11 +66,12 @@ export function applyFilters(workouts, type, range) {
 }
 
 export function computeStats(workouts) {
-  const total    = workouts.length;
-  const minutes  = workouts.reduce((s, w) => s + (w.duration_minutes || 0), 0);
-  const calories = workouts.reduce((s, w) => s + (w.calories || 0), 0);
-  const avg      = total ? minutes / total : 0;
-  return { total, hours: minutes / 60, calories, avgDuration: avg };
+  const total       = workouts.length;
+  const minutes     = workouts.reduce((s, w) => s + (w.duration_minutes || 0), 0);
+  const avgDuration = total ? minutes / total : 0;
+  const withDist    = workouts.filter((w) => w.distance_km > 0);
+  const avgDistance = withDist.length ? withDist.reduce((s, w) => s + w.distance_km, 0) / withDist.length : 0;
+  return { total, hours: minutes / 60, avgDuration, avgDistance };
 }
 
 export const CHART_OPTS = {
