@@ -71,7 +71,9 @@ export function computeStats(workouts) {
   const avgDuration = total ? minutes / total : 0;
   const withDist    = workouts.filter((w) => w.distance_km > 0);
   const avgDistance = withDist.length ? withDist.reduce((s, w) => s + w.distance_km, 0) / withDist.length : 0;
-  return { total, hours: minutes / 60, avgDuration, avgDistance };
+  const withCal     = workouts.filter((w) => w.calories > 0);
+  const avgCalories = withCal.length ? withCal.reduce((s, w) => s + w.calories, 0) / withCal.length : 0;
+  return { total, avgDuration, avgDistance, avgCalories };
 }
 
 export const CHART_OPTS = {
