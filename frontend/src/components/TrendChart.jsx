@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { Bar } from "react-chartjs-2";
-import { groupBy, getMonthKey, formatMonthLabel, rollingAvg, CHART_OPTS } from "../utils/data";
+import { Chart } from "react-chartjs-2";
+import { groupBy, getMonthKey, formatMonthLabel, rollingAvg } from "../utils/data";
 
 export default function TrendChart({ workouts }) {
   const { labels, counts, trend } = useMemo(() => {
@@ -15,12 +15,25 @@ export default function TrendChart({ workouts }) {
     };
   }, [workouts]);
 
+  const options = useMemo(() => ({
+    animation: { duration: 300 },
+    plugins: {
+      legend: { display: true, labels: { color: "#94a3b8", boxWidth: 12, font: { size: 11 } } },
+    },
+    scales: {
+      x: { ticks: { color: "#94a3b8", maxRotation: 45, font: { size: 10 }, maxTicksLimit: 12 }, grid: { color: "#1e293b" } },
+      y: { ticks: { color: "#94a3b8", font: { size: 10 } }, grid: { color: "#1e293b" } },
+    },
+  }), []);
+
   return (
-    <Bar
+    <Chart
+      type="bar"
       data={{
         labels,
         datasets: [
           {
+            type: "bar",
             label: "Workouts",
             data: counts,
             backgroundColor: "#8b5cf680",
@@ -29,9 +42,9 @@ export default function TrendChart({ workouts }) {
             borderRadius: 3,
           },
           {
+            type: "line",
             label: "3-month avg",
             data: trend,
-            type: "line",
             borderColor: "#06b6d4",
             borderWidth: 2,
             pointRadius: 0,
@@ -40,15 +53,7 @@ export default function TrendChart({ workouts }) {
           },
         ],
       }}
-      options={{
-        ...CHART_OPTS,
-        plugins: {
-          legend: {
-            display: true,
-            labels: { color: "#94a3b8", boxWidth: 12, font: { size: 11 } },
-          },
-        },
-      }}
+      options={options}
     />
   );
 }

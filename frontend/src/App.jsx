@@ -8,6 +8,7 @@ import DurationChart  from "./components/DurationChart";
 import CaloriesChart  from "./components/CaloriesChart";
 import TypeBreakdown  from "./components/TypeBreakdown";
 import TrendChart     from "./components/TrendChart";
+import ErrorBoundary  from "./components/ErrorBoundary";
 
 function Card({ title, children }) {
   return (
@@ -39,8 +40,9 @@ export default function App() {
 
   const stats = useMemo(() => computeStats(filtered), [filtered]);
 
-  const firstDate = workouts.map((w) => w.start_date).sort()[0]?.slice(0, 10);
-  const lastDate  = workouts.map((w) => w.start_date).sort().at(-1)?.slice(0, 10);
+  const sorted    = useMemo(() => workouts.map((w) => w.start_date).sort(), [workouts]);
+  const firstDate = sorted[0]?.slice(0, 10);
+  const lastDate  = sorted[sorted.length - 1]?.slice(0, 10);
 
   if (loading) {
     return (
@@ -59,6 +61,7 @@ export default function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="min-h-screen p-6 max-w-7xl mx-auto">
 
       {/* Header */}
@@ -112,5 +115,6 @@ export default function App() {
       </div>
 
     </div>
+    </ErrorBoundary>
   );
 }
