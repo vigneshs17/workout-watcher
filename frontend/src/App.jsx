@@ -82,10 +82,21 @@ export default function App() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Workouts"     value={stats.total}                    color="text-blue-400"   />
-        <StatCard label="Avg Calories"       value={Math.round(stats.avgCalories)}  color="text-emerald-400"/>
-        <StatCard label="Avg Duration (min)" value={stats.avgDuration.toFixed(1)}   color="text-amber-400"  />
-        <StatCard label="Avg Distance (km)"  value={stats.avgDistance.toFixed(2)}   color="text-violet-400" />
+        <StatCard
+          label="Total Workouts" value={stats.total} color="text-blue-400"
+        />
+        <StatCard
+          label="Avg Calories"       value={Math.round(stats.avgCalories)}   color="text-emerald-400"
+          totalLabel="Total Calories" totalValue={stats.totalCalories >= 1000 ? (stats.totalCalories / 1000).toFixed(1) + "k" : Math.round(stats.totalCalories)}
+        />
+        <StatCard
+          label="Avg Duration (min)" value={stats.avgDuration.toFixed(1)}    color="text-amber-400"
+          totalLabel="Total Hours"    totalValue={(stats.totalDuration / 60).toFixed(1)}
+        />
+        <StatCard
+          label="Avg Distance (km)"  value={stats.avgDistance.toFixed(2)}    color="text-violet-400"
+          totalLabel="Total Distance (km)" totalValue={stats.totalDistance.toFixed(1)}
+        />
       </div>
 
       {/* Duration + Calories */}
