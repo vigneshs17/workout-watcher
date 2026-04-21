@@ -11,6 +11,27 @@ export const TYPE_COLORS = {
 export const DEFAULT_COLOR = "#64748b";
 export const typeColor = (t) => TYPE_COLORS[t] || DEFAULT_COLOR;
 
+// Returns "year" | "month" | "week" based on selected time range
+export function granularityFor(range) {
+  if (range === "all") return "year";
+  if (range === "1y")  return "month";
+  return "week";
+}
+
+export function getYearKey(dateStr) {
+  return dateStr.slice(0, 4);
+}
+
+export function formatYearLabel(key) {
+  return key;
+}
+
+export function keyAndLabel(dateStr, granularity) {
+  if (granularity === "year")  return { key: getYearKey(dateStr),  fmt: formatYearLabel };
+  if (granularity === "month") return { key: getMonthKey(dateStr), fmt: formatMonthLabel };
+  return { key: getWeekStart(dateStr), fmt: formatWeekLabel };
+}
+
 export function getWeekStart(dateStr) {
   const d   = new Date(dateStr);
   const day = d.getUTCDay();

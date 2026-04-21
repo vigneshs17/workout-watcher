@@ -1,19 +1,22 @@
 import { useMemo } from "react";
 import { Chart } from "react-chartjs-2";
-import { groupBy, getMonthKey, formatMonthLabel, rollingAvg } from "../utils/data";
+import { groupBy, granularityFor, keyAndLabel, rollingAvg } from "../utils/data";
 
-export default function TrendChart({ workouts }) {
+export default function TrendChart({ workouts, range }) {
   const { labels, counts, trend } = useMemo(() => {
+    const gran   = granularityFor(range);
+    const window = gran === "year" ? 2 : gran === "month" ? 3 : 4;
     const sorted = [...workouts].sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
-    const map    = groupBy(sorted, (w) => getMonthKey(w.start_date), () => 1);
-    const months = Object.keys(map).sort();
-    const counts = months.map((k) => map[k]);
+    const map    = groupBy(sorted, (w) => keyAndLabel(w.start_date, gran).key, () => 1);
+    const keys   = Object.keys(map).sort();
+    const fmt    = keys.length ? keyAndLabel(keys[0], gran).fmt : (k) => k;
+    const counts = keys.map((k) => map[k]);
     return {
-      labels: months.map(formatMonthLabel),
+      labels: keys.map(fmt),
       counts,
-      trend: rollingAvg(counts, 3),
+      trend: rollingAvg(counts, window),
     };
-  }, [workouts]);
+  }, [workouts, range]);
 
   const options = useMemo(() => ({
     animation: { duration: 300 },
@@ -25,6 +28,9 @@ export default function TrendChart({ workouts }) {
       y: { ticks: { color: "#94a3b8", font: { size: 10 } }, grid: { color: "#1e293b" } },
     },
   }), []);
+
+  const avgLabel = granularityFor(range) === "year" ? "2-year avg"
+    : granularityFor(range) === "month" ? "3-month avg" : "4-week avg";
 
   return (
     <Chart
@@ -43,7 +49,7 @@ export default function TrendChart({ workouts }) {
           },
           {
             type: "line",
-            label: "3-month avg",
+            label: avgLabel,
             data: trend,
             borderColor: "#06b6d4",
             borderWidth: 2,

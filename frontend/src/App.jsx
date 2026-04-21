@@ -101,21 +101,21 @@ export default function App() {
 
       {/* Duration + Calories */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card title="Weekly Duration (min)">
-          <DurationChart workouts={filtered} />
+        <Card title={activeRange === "all" ? "Yearly Duration (min)" : activeRange === "1y" ? "Monthly Duration (min)" : "Weekly Duration (min)"}>
+          <DurationChart workouts={filtered} range={activeRange} />
         </Card>
-        <Card title="Weekly Calories">
-          <CaloriesChart workouts={filtered} />
+        <Card title={activeRange === "all" ? "Yearly Calories" : activeRange === "1y" ? "Monthly Calories" : "Weekly Calories"}>
+          <CaloriesChart workouts={filtered} range={activeRange} />
         </Card>
       </div>
 
-      {/* Type breakdown + Monthly trend */}
+      {/* Type breakdown + Trend */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <Card title="Workout Type Breakdown">
           <TypeBreakdown workouts={filtered} />
         </Card>
-        <Card title="Monthly Workouts + 3-Month Trend">
-          <TrendChart workouts={filtered} />
+        <Card title={activeRange === "all" ? "Yearly Workouts + Trend" : activeRange === "1y" ? "Monthly Workouts + Trend" : "Weekly Workouts + Trend"}>
+          <TrendChart workouts={filtered} range={activeRange} />
         </Card>
       </div>
 

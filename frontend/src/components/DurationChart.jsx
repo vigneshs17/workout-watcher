@@ -1,17 +1,19 @@
 import { useMemo } from "react";
 import { Bar } from "react-chartjs-2";
-import { groupBy, getWeekStart, formatWeekLabel } from "../utils/data";
+import { groupBy, granularityFor, keyAndLabel } from "../utils/data";
 
-export default function DurationChart({ workouts }) {
+export default function DurationChart({ workouts, range }) {
   const { labels, values } = useMemo(() => {
+    const gran   = granularityFor(range);
     const sorted = [...workouts].sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
-    const map    = groupBy(sorted, (w) => getWeekStart(w.start_date), (w) => parseFloat(w.duration_minutes) || 0);
-    const weeks  = Object.keys(map).sort();
+    const map    = groupBy(sorted, (w) => keyAndLabel(w.start_date, gran).key, (w) => parseFloat(w.duration_minutes) || 0);
+    const keys   = Object.keys(map).sort();
+    const fmt    = keys.length ? keyAndLabel(keys[0], gran).fmt : (k) => k;
     return {
-      labels: weeks.map(formatWeekLabel),
-      values: weeks.map((k) => Math.round(map[k])),
+      labels: keys.map(fmt),
+      values: keys.map((k) => Math.round(map[k])),
     };
-  }, [workouts]);
+  }, [workouts, range]);
 
   const options = useMemo(() => ({
     animation: { duration: 300 },
