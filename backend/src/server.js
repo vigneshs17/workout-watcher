@@ -57,6 +57,44 @@ app.post("/api/workouts", authMiddleware, async (req, res) => {
   }
 });
 
+// ── Health Auto Export sync endpoint ──────────────────────────
+function parseHAEDate(str) {
+  const m = str.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})/);
+  if (!m) return new Date(str).toISOString();
+  const [, date, time, h, min] = m;
+  return new Date(`${date}T${time}${h}:${min}`).toISOString();
+}
+
+function transformHAEWorkout(w) {
+  return {
+    id:              w.id,
+    type:            w.name,
+    startDate:       parseHAEDate(w.start),
+    endDate:         parseHAEDate(w.end),
+    durationMinutes: Math.round((w.duration / 60) * 10) / 10,
+    calories:        w.activeEnergyBurned ? Math.round(w.activeEnergyBurned.qty / 4.184) : null,
+    distanceKm:      w.distance ? Math.round(w.distance.qty * 100) / 100 : null,
+    heartRate:       null,
+    source:          w.activeEnergy?.[0]?.source ?? "Apple Watch",
+  };
+}
+
+app.post("/api/sync", authMiddleware, async (req, res) => {
+  const raw = req.body?.data?.workouts;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return res.status(400).json({ error: "No workouts in payload" });
+  }
+  try {
+    const workouts = raw.map(transformHAEWorkout);
+    await upsertMany(workouts, new Date().toISOString());
+    console.log(`[${new Date().toISOString()}] HAE sync: ${workouts.length} workouts`);
+    res.json({ status: "ok", synced: workouts.length });
+  } catch (err) {
+    console.error("HAE sync error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Dashboard API endpoints ────────────────────────────────────
 
 app.get("/api/summary", async (req, res) => {
