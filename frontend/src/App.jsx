@@ -4,7 +4,7 @@ import { applyFilters, computeStats } from "./utils/data";
 import StatCard       from "./components/StatCard";
 import Filters        from "./components/Filters";
 import DurationChart  from "./components/DurationChart";
-import CaloriesChart  from "./components/CaloriesChart";
+import DistanceChart  from "./components/DistanceChart";
 import TypeBreakdown  from "./components/TypeBreakdown";
 import TrendChart     from "./components/TrendChart";
 import ErrorBoundary  from "./components/ErrorBoundary";
@@ -104,8 +104,8 @@ export default function App() {
         <Card title={activeRange === "all" ? "Yearly Duration (min)" : activeRange === "1y" ? "Monthly Duration (min)" : "Weekly Duration (min)"}>
           <DurationChart workouts={filtered} range={activeRange} />
         </Card>
-        <Card title={activeRange === "all" ? "Yearly Calories" : activeRange === "1y" ? "Monthly Calories" : "Weekly Calories"}>
-          <CaloriesChart workouts={filtered} range={activeRange} />
+        <Card title={activeRange === "all" ? "Yearly Distance (km)" : activeRange === "1y" ? "Monthly Distance (km)" : "Weekly Distance (km)"}>
+          <DistanceChart workouts={filtered} range={activeRange} />
         </Card>
       </div>
 

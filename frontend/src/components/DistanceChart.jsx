@@ -2,16 +2,16 @@ import { useMemo } from "react";
 import { Bar } from "react-chartjs-2";
 import { groupBy, granularityFor, keyAndLabel } from "../utils/data";
 
-export default function CaloriesChart({ workouts, range }) {
+export default function DistanceChart({ workouts, range }) {
   const { labels, values } = useMemo(() => {
     const gran   = granularityFor(range);
     const sorted = [...workouts].sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
-    const map    = groupBy(sorted, (w) => keyAndLabel(w.start_date, gran).key, (w) => parseFloat(w.calories) || 0);
+    const map    = groupBy(sorted, (w) => keyAndLabel(w.start_date, gran).key, (w) => parseFloat(w.distance_km) || 0);
     const keys   = Object.keys(map).sort();
     const fmt    = keys.length ? keyAndLabel(keys[0], gran).fmt : (k) => k;
     return {
       labels: keys.map(fmt),
-      values: keys.map((k) => Math.round(map[k])),
+      values: keys.map((k) => Math.round(map[k] * 10) / 10),
     };
   }, [workouts, range]);
 
@@ -30,8 +30,8 @@ export default function CaloriesChart({ workouts, range }) {
         labels,
         datasets: [{
           data: values,
-          backgroundColor: "#f59e0b80",
-          borderColor: "#f59e0b",
+          backgroundColor: "#06b6d480",
+          borderColor: "#06b6d4",
           borderWidth: 1,
           borderRadius: 3,
         }],
