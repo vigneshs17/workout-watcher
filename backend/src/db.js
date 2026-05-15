@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { Pool } = require("pg");
 
 const pool = new Pool({
@@ -6,10 +7,6 @@ const pool = new Pool({
   max: 5,
 });
 
-// TEMP shim — every query is parameterized on userId, but defaults to the admin
-// user so existing server.js callers keep working until step 3 of the
-// multi-tenant rollout, where each route will pass req.user.id explicitly.
-const DEFAULT_USER_ID = 1;
 
 async function initDb() {
   await pool.query(`
@@ -31,7 +28,7 @@ async function initDb() {
   `);
 }
 
-async function upsertMany(workouts, syncedAt, userId = DEFAULT_USER_ID) {
+async function upsertMany(workouts, syncedAt, userId) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -67,7 +64,7 @@ async function upsertMany(workouts, syncedAt, userId = DEFAULT_USER_ID) {
   }
 }
 
-async function getAllWorkouts(limit = 200, userId = DEFAULT_USER_ID) {
+async function getAllWorkouts(limit = 200, userId) {
   const { rows } = await pool.query(
     `SELECT * FROM workouts WHERE user_id = $1 ORDER BY start_date DESC LIMIT $2`,
     [userId, limit]
@@ -75,7 +72,7 @@ async function getAllWorkouts(limit = 200, userId = DEFAULT_USER_ID) {
   return rows;
 }
 
-async function getFrequency(days = 90, userId = DEFAULT_USER_ID) {
+async function getFrequency(days = 90, userId) {
   const { rows } = await pool.query(
     `SELECT date(start_date) AS day, COUNT(*) AS count
      FROM workouts
@@ -88,7 +85,7 @@ async function getFrequency(days = 90, userId = DEFAULT_USER_ID) {
   return rows;
 }
 
-async function getWeeklyDuration(weeks = 12, userId = DEFAULT_USER_ID) {
+async function getWeeklyDuration(weeks = 12, userId) {
   const { rows } = await pool.query(
     `SELECT
        to_char(start_date::timestamp, 'IYYY-"W"IW') AS week,
@@ -104,7 +101,7 @@ async function getWeeklyDuration(weeks = 12, userId = DEFAULT_USER_ID) {
   return rows;
 }
 
-async function getWeeklyCalories(weeks = 12, userId = DEFAULT_USER_ID) {
+async function getWeeklyCalories(weeks = 12, userId) {
   const { rows } = await pool.query(
     `SELECT
        to_char(start_date::timestamp, 'IYYY-"W"IW') AS week,
@@ -120,7 +117,7 @@ async function getWeeklyCalories(weeks = 12, userId = DEFAULT_USER_ID) {
   return rows;
 }
 
-async function getTypeBreakdown(userId = DEFAULT_USER_ID) {
+async function getTypeBreakdown(userId) {
   const { rows } = await pool.query(
     `SELECT
        type,
@@ -137,7 +134,7 @@ async function getTypeBreakdown(userId = DEFAULT_USER_ID) {
   return rows;
 }
 
-async function getSummary(userId = DEFAULT_USER_ID) {
+async function getSummary(userId) {
   const { rows } = await pool.query(
     `SELECT
        COUNT(*)                                       AS total_workouts,
@@ -154,6 +151,44 @@ async function getSummary(userId = DEFAULT_USER_ID) {
   return rows[0];
 }
 
+// ── User functions ─────────────────────────────────────────────
+
+async function findOrCreateUser(googleSub, email, name) {
+  // Case 1: already exists by google_sub
+  let res = await pool.query(`SELECT * FROM users WHERE google_sub = $1`, [googleSub]);
+  if (res.rows[0]) return res.rows[0];
+
+  // Case 2: seeded admin row (google_sub is null, matched by email) — backfill sub
+  res = await pool.query(`SELECT * FROM users WHERE email = $1 AND google_sub IS NULL`, [email]);
+  if (res.rows[0]) {
+    const updated = await pool.query(
+      `UPDATE users SET google_sub = $1, name = COALESCE(name, $2) WHERE id = $3 RETURNING *`,
+      [googleSub, name, res.rows[0].id]
+    );
+    return updated.rows[0];
+  }
+
+  // Case 3: new user — create with is_active=false
+  const syncToken = crypto.randomBytes(24).toString("hex");
+  const created = await pool.query(
+    `INSERT INTO users (google_sub, email, name, sync_token)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [googleSub, email, name, syncToken]
+  );
+  return created.rows[0];
+}
+
+async function getUserById(id) {
+  const { rows } = await pool.query(`SELECT * FROM users WHERE id = $1`, [id]);
+  return rows[0] ?? null;
+}
+
+async function getUserBySyncToken(token) {
+  const { rows } = await pool.query(`SELECT * FROM users WHERE sync_token = $1`, [token]);
+  return rows[0] ?? null;
+}
+
 module.exports = {
   initDb,
   upsertMany,
@@ -163,4 +198,7 @@ module.exports = {
   getWeeklyCalories,
   getTypeBreakdown,
   getSummary,
+  findOrCreateUser,
+  getUserById,
+  getUserBySyncToken,
 };

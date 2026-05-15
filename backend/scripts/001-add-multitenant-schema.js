@@ -92,13 +92,17 @@ async function run() {
     }
 
     const pkCheck = await client.query(`
-      SELECT array_agg(a.attname ORDER BY array_position(c.conkey, a.attnum)) AS cols
-        FROM pg_constraint c
-        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
-       WHERE c.conrelid = 'workouts'::regclass AND c.contype = 'p'
+      SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+       WHERE tc.table_schema = 'public'
+         AND tc.table_name = 'workouts'
+         AND tc.constraint_type = 'PRIMARY KEY'
     `);
-    const pkCols = pkCheck.rows[0]?.cols || [];
-    const alreadyComposite = pkCols.length === 2 && pkCols.includes("user_id") && pkCols.includes("id");
+    const pkCols = pkCheck.rows.map(r => r.column_name);
+    const alreadyComposite = pkCols.includes("user_id") && pkCols.includes("id");
 
     if (!alreadyComposite) {
       console.log(`→ Swapping primary key (current: ${pkCols.join(", ") || "<none>"}) to (user_id, id)...`);

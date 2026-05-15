@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
-import { useWorkouts }    from "./hooks/useWorkouts";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useAuth }                from "./context/AuthContext";
+import { useWorkouts }            from "./hooks/useWorkouts";
 import { applyFilters, computeStats } from "./utils/data";
 import StatCard       from "./components/StatCard";
 import Filters        from "./components/Filters";
@@ -8,6 +10,9 @@ import DistanceChart  from "./components/DistanceChart";
 import TypeBreakdown  from "./components/TypeBreakdown";
 import TrendChart     from "./components/TrendChart";
 import ErrorBoundary  from "./components/ErrorBoundary";
+import LoginPage      from "./pages/LoginPage";
+import PendingPage    from "./pages/PendingPage";
+import AccountPage    from "./pages/AccountPage";
 
 function Card({ title, children }) {
   return (
@@ -22,8 +27,10 @@ function Card({ title, children }) {
   );
 }
 
-export default function App() {
+function Dashboard() {
+  const { user, logout }          = useAuth();
   const { workouts, loading, error } = useWorkouts();
+  const navigate                  = useNavigate();
   const [activeType,  setActiveType]  = useState("all");
   const [activeRange, setActiveRange] = useState("all");
 
@@ -31,14 +38,11 @@ export default function App() {
     () => [...new Set(workouts.map((w) => w.type))].sort(),
     [workouts]
   );
-
   const filtered = useMemo(
     () => applyFilters(workouts, activeType, activeRange),
     [workouts, activeType, activeRange]
   );
-
-  const stats = useMemo(() => computeStats(filtered), [filtered]);
-
+  const stats     = useMemo(() => computeStats(filtered), [filtered]);
   const sorted    = useMemo(() => workouts.map((w) => w.start_date).sort(), [workouts]);
   const firstDate = sorted[0]?.slice(0, 10);
   const lastDate  = sorted[sorted.length - 1]?.slice(0, 10);
@@ -61,65 +65,97 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-    <div className="min-h-screen p-6 max-w-7xl mx-auto">
-
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Workout Dashboard</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            {workouts.length} workouts · {firstDate} → {lastDate}
-          </p>
+      <div className="min-h-screen p-6 max-w-7xl mx-auto">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Workout Dashboard</h1>
+            <p className="text-slate-400 text-sm mt-1">
+              {workouts.length} workouts · {firstDate} → {lastDate}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Filters
+              types={types}
+              activeType={activeType}
+              activeRange={activeRange}
+              onTypeChange={setActiveType}
+              onRangeChange={setActiveRange}
+            />
+            <button
+              onClick={() => navigate("/account")}
+              className="text-slate-400 text-sm hover:text-white transition-colors shrink-0"
+              title={user?.email}
+            >
+              Account
+            </button>
+          </div>
         </div>
-        <Filters
-          types={types}
-          activeType={activeType}
-          activeRange={activeRange}
-          onTypeChange={setActiveType}
-          onRangeChange={setActiveRange}
-        />
-      </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label="Total Workouts" value={stats.total} color="text-blue-400"
-        />
-        <StatCard
-          label="Avg Calories"       value={Math.round(stats.avgCalories)}   color="text-emerald-400"
-          totalLabel="Total Calories" totalValue={stats.totalCalories >= 1000 ? (stats.totalCalories / 1000).toFixed(1) + "k" : Math.round(stats.totalCalories)}
-        />
-        <StatCard
-          label="Avg Duration (min)" value={stats.avgDuration.toFixed(1)}    color="text-amber-400"
-          totalLabel="Total Hours"    totalValue={(stats.totalDuration / 60).toFixed(1)}
-        />
-        <StatCard
-          label="Avg Distance (km)"  value={stats.avgDistance.toFixed(2)}    color="text-violet-400"
-          totalLabel="Total Distance (km)" totalValue={stats.totalDistance.toFixed(1)}
-        />
-      </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatCard label="Total Workouts" value={stats.total} color="text-blue-400" />
+          <StatCard
+            label="Avg Calories" value={Math.round(stats.avgCalories)} color="text-emerald-400"
+            totalLabel="Total Calories" totalValue={stats.totalCalories >= 1000 ? (stats.totalCalories / 1000).toFixed(1) + "k" : Math.round(stats.totalCalories)}
+          />
+          <StatCard
+            label="Avg Duration (min)" value={stats.avgDuration.toFixed(1)} color="text-amber-400"
+            totalLabel="Total Hours" totalValue={(stats.totalDuration / 60).toFixed(1)}
+          />
+          <StatCard
+            label="Avg Distance (km)" value={stats.avgDistance.toFixed(2)} color="text-violet-400"
+            totalLabel="Total Distance (km)" totalValue={stats.totalDistance.toFixed(1)}
+          />
+        </div>
 
-      {/* Duration + Calories */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card title={activeRange === "all" ? "Yearly Duration (min)" : activeRange === "1y" ? "Monthly Duration (min)" : "Weekly Duration (min)"}>
-          <DurationChart workouts={filtered} range={activeRange} />
-        </Card>
-        <Card title={activeRange === "all" ? "Yearly Distance (km)" : activeRange === "1y" ? "Monthly Distance (km)" : "Weekly Distance (km)"}>
-          <DistanceChart workouts={filtered} range={activeRange} />
-        </Card>
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <Card title={activeRange === "all" ? "Yearly Duration (min)" : activeRange === "1y" ? "Monthly Duration (min)" : "Weekly Duration (min)"}>
+            <DurationChart workouts={filtered} range={activeRange} />
+          </Card>
+          <Card title={activeRange === "all" ? "Yearly Distance (km)" : activeRange === "1y" ? "Monthly Distance (km)" : "Weekly Distance (km)"}>
+            <DistanceChart workouts={filtered} range={activeRange} />
+          </Card>
+        </div>
 
-      {/* Type breakdown + Trend */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card title="Workout Type Breakdown">
-          <TypeBreakdown workouts={filtered} />
-        </Card>
-        <Card title={activeRange === "all" ? "Yearly Workouts + Trend" : activeRange === "1y" ? "Monthly Workouts + Trend" : "Weekly Workouts + Trend"}>
-          <TrendChart workouts={filtered} range={activeRange} />
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <Card title="Workout Type Breakdown">
+            <TypeBreakdown workouts={filtered} />
+          </Card>
+          <Card title={activeRange === "all" ? "Yearly Workouts + Trend" : activeRange === "1y" ? "Monthly Workouts + Trend" : "Weekly Workouts + Trend"}>
+            <TrendChart workouts={filtered} range={activeRange} />
+          </Card>
+        </div>
       </div>
-
-    </div>
     </ErrorBoundary>
+  );
+}
+
+function RequireAuth({ children }) {
+  const { user, authLoading } = useAuth();
+  if (authLoading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-slate-400 text-lg animate-pulse">Loading…</div>
+    </div>
+  );
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.is_active) return <Navigate to="/pending" replace />;
+  return children;
+}
+
+function RequireUnauth({ children }) {
+  const { user, authLoading } = useAuth();
+  if (authLoading) return null;
+  if (user?.is_active) return <Navigate to="/" replace />;
+  return children;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<RequireUnauth><LoginPage /></RequireUnauth>} />
+      <Route path="/pending" element={<PendingPage />} />
+      <Route path="/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
+      <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

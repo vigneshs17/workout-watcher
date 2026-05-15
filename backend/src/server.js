@@ -1,5 +1,7 @@
 const express = require("express");
-const cors = require("cors");
+const cors    = require("cors");
+const jwt     = require("jsonwebtoken");
+const { OAuth2Client } = require("google-auth-library");
 const {
   initDb,
   upsertMany,
@@ -9,47 +11,119 @@ const {
   getWeeklyCalories,
   getTypeBreakdown,
   getSummary,
+  findOrCreateUser,
+  getUserById,
+  getUserBySyncToken,
 } = require("./db");
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const app          = express();
+const PORT         = process.env.PORT || 3000;
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ── Middleware ─────────────────────────────────────────────────
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || "*",
+  credentials: true,
+}));
 app.use(express.json({ limit: "2mb" }));
 
-// Log all incoming requests
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log("Body:", JSON.stringify(req.body, null, 2));
-  }
   next();
 });
 
-// Optional: simple token auth (set SYNC_TOKEN env var to enable)
-function authMiddleware(req, res, next) {
-  const token = process.env.SYNC_TOKEN;
-  if (!token) return next();
-
-  const provided = req.headers["x-sync-token"] || req.query.token;
-  if (provided !== token) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
+// ── Auth helpers ───────────────────────────────────────────────
+function signToken(user) {
+  return jwt.sign(
+    { userId: user.id, email: user.email, isAdmin: user.is_admin },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 }
 
-// ── Webhook: receive workouts from Scriptable ──────────────────
-app.post("/api/workouts", authMiddleware, async (req, res) => {
-  const { workouts, synced_at } = req.body;
+// Protects dashboard GET endpoints — reads Bearer JWT, attaches req.user
+function requireUser(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    req.user = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Unauthorized" });
+  }
+}
 
+// Protects ingest endpoints — reads x-sync-token, attaches req.syncUser
+async function requireActiveSyncToken(req, res, next) {
+  const token = req.headers["x-sync-token"] || req.query.token;
+  if (!token) return res.status(401).json({ error: "Missing sync token" });
+
+  try {
+    const user = await getUserBySyncToken(token);
+    if (!user) return res.status(401).json({ error: "Invalid sync token" });
+    if (!user.is_active) return res.status(402).json({ error: "Account not activated" });
+    req.syncUser = user;
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Auth routes ────────────────────────────────────────────────
+app.post("/api/auth/google", async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ error: "Missing credential" });
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const { sub, email, name } = ticket.getPayload();
+    const user = await findOrCreateUser(sub, email, name);
+
+    if (!user.is_active && process.env.NEW_SIGNUP_WEBHOOK_URL) {
+      fetch(process.env.NEW_SIGNUP_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email, name: user.name }),
+      }).catch(() => {});
+    }
+
+    res.json({ jwt: signToken(user) });
+  } catch (err) {
+    console.error("Google auth error:", err.message);
+    res.status(401).json({ error: "Invalid credential" });
+  }
+});
+
+app.get("/api/me", requireUser, async (req, res) => {
+  try {
+    const user = await getUserById(req.user.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({
+      email:      user.email,
+      name:       user.name,
+      is_active:  user.is_active,
+      is_admin:   user.is_admin,
+      sync_token: user.sync_token,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Webhook: receive workouts from Scriptable ──────────────────
+app.post("/api/workouts", requireActiveSyncToken, async (req, res) => {
+  const { workouts, synced_at } = req.body;
   if (!Array.isArray(workouts) || workouts.length === 0) {
     return res.status(400).json({ error: "No workouts in payload" });
   }
-
   try {
-    await upsertMany(workouts, synced_at || new Date().toISOString());
-    console.log(`[${new Date().toISOString()}] Synced ${workouts.length} workouts`);
+    await upsertMany(workouts, synced_at || new Date().toISOString(), req.syncUser.id);
+    console.log(`[${new Date().toISOString()}] Synced ${workouts.length} workouts for user ${req.syncUser.id}`);
     res.json({ status: "ok", synced: workouts.length });
   } catch (err) {
     console.error("Sync error:", err.message);
@@ -79,15 +153,15 @@ function transformHAEWorkout(w) {
   };
 }
 
-app.post("/api/sync", authMiddleware, async (req, res) => {
+app.post("/api/sync", requireActiveSyncToken, async (req, res) => {
   const raw = req.body?.data?.workouts;
   if (!Array.isArray(raw) || raw.length === 0) {
     return res.status(400).json({ error: "No workouts in payload" });
   }
   try {
     const workouts = raw.map(transformHAEWorkout);
-    await upsertMany(workouts, new Date().toISOString());
-    console.log(`[${new Date().toISOString()}] HAE sync: ${workouts.length} workouts`);
+    await upsertMany(workouts, new Date().toISOString(), req.syncUser.id);
+    console.log(`[${new Date().toISOString()}] HAE sync: ${workouts.length} workouts for user ${req.syncUser.id}`);
     res.json({ status: "ok", synced: workouts.length });
   } catch (err) {
     console.error("HAE sync error:", err.message);
@@ -96,64 +170,49 @@ app.post("/api/sync", authMiddleware, async (req, res) => {
 });
 
 // ── Dashboard API endpoints ────────────────────────────────────
-
-app.get("/api/summary", async (req, res) => {
-  try {
-    res.json(await getSummary());
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.get("/api/summary", requireUser, async (req, res) => {
+  try { res.json(await getSummary(req.user.userId)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/workouts", async (req, res) => {
+app.get("/api/workouts", requireUser, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 200;
-    res.json(await getAllWorkouts(limit));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    res.json(await getAllWorkouts(limit, req.user.userId));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/frequency", async (req, res) => {
+app.get("/api/frequency", requireUser, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 90;
-    res.json(await getFrequency(days));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    res.json(await getFrequency(days, req.user.userId));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/duration", async (req, res) => {
+app.get("/api/duration", requireUser, async (req, res) => {
   try {
     const weeks = parseInt(req.query.weeks) || 12;
-    res.json(await getWeeklyDuration(weeks));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    res.json(await getWeeklyDuration(weeks, req.user.userId));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/calories", async (req, res) => {
+app.get("/api/calories", requireUser, async (req, res) => {
   try {
     const weeks = parseInt(req.query.weeks) || 12;
-    res.json(await getWeeklyCalories(weeks));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    res.json(await getWeeklyCalories(weeks, req.user.userId));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get("/api/types", async (req, res) => {
-  try {
-    res.json(await getTypeBreakdown());
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.get("/api/types", requireUser, async (req, res) => {
+  try { res.json(await getTypeBreakdown(req.user.userId)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: new Date().toISOString() });
 });
 
-// ── Debug: capture raw payload ─────────────────────────────────
+// ── Debug ──────────────────────────────────────────────────────
 let lastDebugPayload = null;
 app.post("/api/debug", (req, res) => {
   lastDebugPayload = req.body;

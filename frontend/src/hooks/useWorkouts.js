@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-
-const API = "https://workout-watcher.onrender.com";
+import { authFetch } from "../utils/api";
 
 export function useWorkouts() {
   const [workouts, setWorkouts] = useState([]);
@@ -8,7 +7,7 @@ export function useWorkouts() {
   const [error,    setError]    = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/api/workouts?limit=2000`)
+    authFetch("/api/workouts?limit=2000")
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
