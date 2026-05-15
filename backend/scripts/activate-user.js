@@ -22,7 +22,7 @@ const pool = new Pool({
 
 async function run() {
   const res = await pool.query(
-    `UPDATE users SET is_active = true WHERE email = $1 RETURNING id, email, sync_token`,
+    `UPDATE users SET is_active = true WHERE lower(email) = lower($1) RETURNING id, email, sync_token`,
     [email]
   );
 

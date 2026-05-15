@@ -1,7 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function PendingPage() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4 text-center">
@@ -22,7 +24,7 @@ export default function PendingPage() {
         </div>
 
         <button
-          onClick={logout}
+          onClick={() => { logout(); navigate("/login"); }}
           className="text-slate-500 text-xs hover:text-slate-300 transition-colors"
         >
           Sign out
